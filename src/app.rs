@@ -477,6 +477,7 @@ pub fn App() -> impl IntoView {
                 box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.5);
                 cursor: crosshair;
                 transition: border-color 0.3s;
+                touch-action: none; /* Prevent scrolling when drawing on touch devices */
             }
 
             .canvas-wrapper:hover {
@@ -489,6 +490,7 @@ pub fn App() -> impl IntoView {
                 display: block;
                 image-rendering: pixelated;
                 image-rendering: crisp-edges;
+                touch-action: none; /* Prevent touch gestures from scrolling the page */
             }
 
             .brush-preview {
@@ -677,14 +679,170 @@ pub fn App() -> impl IntoView {
             }
 
             @media (max-width: 900px) {
-                .main-content {
-                    grid-template-columns: 1fr;
-                    overflow-y: auto;
-                }
                 .dashboard {
-                    height: auto;
+                    width: 100vw;
+                    height: 100dvh;
                     max-height: none;
-                    overflow: visible;
+                    border-radius: 0;
+                    border: none;
+                    padding: 8px;
+                    gap: 6px;
+                    overflow: hidden;
+                    box-sizing: border-box;
+                }
+                .header {
+                    padding-bottom: 6px;
+                }
+                .title-area h1 {
+                    font-size: 18px;
+                }
+                .title-area p {
+                    font-size: 8px;
+                    letter-spacing: 1px;
+                }
+                .main-content {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    overflow: hidden;
+                    height: calc(100% - 45px);
+                }
+                
+                /* Layout ordering */
+                .center-panel {
+                    order: 1;
+                    gap: 6px;
+                    width: 100%;
+                }
+                .sidebar:nth-of-type(1) {
+                    order: 2; /* Element picker */
+                }
+                .sidebar.info-panel {
+                    order: 3; /* Inspector & Stats */
+                }
+
+                .canvas-wrapper {
+                    max-width: 360px; /* Perfect for S8+ portrait viewport */
+                    margin: 0 auto;
+                }
+
+                .control-panel {
+                    padding: 8px;
+                    gap: 6px;
+                    max-width: 360px;
+                    margin: 0 auto;
+                }
+                .control-row {
+                    gap: 4px;
+                }
+                .control-btn {
+                    padding: 5px 8px;
+                    font-size: 11px;
+                }
+                .slider-container {
+                    font-size: 11px;
+                }
+                .slider-container input[type=range] {
+                    width: 60px;
+                }
+
+                /* Mobile Element Picker: Horizontal Scrollable Tray */
+                .sidebar:nth-of-type(1) {
+                    flex-direction: row;
+                    overflow-x: auto;
+                    overflow-y: hidden;
+                    height: 80px;
+                    min-height: 80px;
+                    padding: 6px;
+                    gap: 10px;
+                    background: rgba(8, 10, 15, 0.7);
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                    -webkit-overflow-scrolling: touch;
+                }
+                .elem-group {
+                    flex-direction: row;
+                    align-items: center;
+                    gap: 4px;
+                    height: 100%;
+                }
+                .elem-group h2 {
+                    margin: 0;
+                    font-size: 9px;
+                    writing-mode: vertical-lr;
+                    transform: rotate(180deg);
+                    height: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-left: none;
+                    border-right: 2px solid var(--primary-neon);
+                    padding: 0 2px;
+                    color: var(--primary-neon);
+                }
+                .elem-grid {
+                    display: flex;
+                    flex-direction: row;
+                    gap: 4px;
+                }
+                .elem-btn {
+                    padding: 4px 8px;
+                    font-size: 11px;
+                    flex-shrink: 0;
+                    min-width: 75px;
+                    height: 30px;
+                    justify-content: center;
+                }
+
+                /* Mobile Info Panel: Inspector & Stats side-by-side */
+                .sidebar.info-panel {
+                    flex-direction: row;
+                    gap: 6px;
+                    padding: 6px;
+                    height: 90px;
+                    min-height: 90px;
+                    flex-shrink: 0;
+                    background: rgba(8, 10, 15, 0.7);
+                    overflow: hidden;
+                }
+                .sidebar.info-panel .card {
+                    flex: 1;
+                    padding: 6px;
+                    height: 100%;
+                    overflow-y: auto;
+                    margin: 0;
+                    border-radius: 8px;
+                }
+                .card-title {
+                    font-size: 9px;
+                    margin-bottom: 4px;
+                    padding-bottom: 2px;
+                }
+                .elem-detail-title {
+                    font-size: 12px;
+                    gap: 4px;
+                    margin-bottom: 2px;
+                }
+                .elem-detail-desc {
+                    font-size: 9px;
+                    line-height: 1.25;
+                }
+                .elem-properties {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 2px;
+                    margin-top: 4px;
+                }
+                .elem-prop {
+                    padding: 1px 3px;
+                }
+                .stat-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 2px;
+                }
+                .stat-item {
+                    font-size: 9px;
                 }
             }
             "#
