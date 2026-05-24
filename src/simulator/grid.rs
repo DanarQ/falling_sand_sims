@@ -1,5 +1,5 @@
-use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::rngs::ThreadRng;
 
 use crate::simulator::element::{Cell, ElementType};
 
@@ -83,11 +83,13 @@ impl Grid {
                         let tx = px as usize;
                         let current_elem = self.get(tx, ty).element;
                         
-                        // Bugfix: Prevent overwriting Stone walls unless drawing Stone or Air (Eraser)
+                        // Prevent overwriting Stone walls unless drawing Stone or Air (Eraser)
                         if current_elem == ElementType::Stone {
                             if element == ElementType::Stone || element == ElementType::Air {
                                 self.set(tx, ty, Cell::new(element));
                             }
+                        } else if element.is_gas() && current_elem != ElementType::Air && !current_elem.is_flammable() {
+                            // Prevent gas elements (Fire/Smoke/Steam) from deleting solid/liquid targets (Lava/Sand/Water/Ice)
                         } else {
                             self.set(tx, ty, Cell::new(element));
                         }
@@ -97,12 +99,9 @@ impl Grid {
         }
     }
 
-    /// Fill the buffer with 4-byte RGBA values for WebGL texture upload
     pub fn get_color_buffer(&self, buffer: &mut [u8]) {
         for (i, cell) in self.cells.iter().enumerate() {
             let offset = i * 4;
-            
-            // Highlight fire/lava with dynamic flickering
             let mut color = cell.color;
             if cell.element == ElementType::Fire {
                 let mut rng = rand::thread_rng();
@@ -121,22 +120,18 @@ impl Grid {
         }
     }
 
-    /// Generate a rich, Noita-like terrain layout filled with water reservoirs, oil pools,
-    /// flammable wood walls, coal deposits, ice walls, and explosive gunpowder boxes.
     pub fn generate_terrain(&mut self) {
         self.clear();
         let mut rng = rand::thread_rng();
         
-        // 1. Generate caverns, floor, and bedrock borders
+        // 1. Bedrock contours
         for y in 0..self.height {
             for x in 0..self.width {
-                // Bottom bedrock and side borders
                 if y == self.height - 1 || x == 0 || x == self.width - 1 {
                     self.set(x, y, Cell::new(ElementType::Stone));
                     continue;
                 }
 
-                // Cavern contours at the bottom
                 let platform_height = (self.height as f32 * 0.72) 
                     + ((x as f32 * 0.045).sin() * 8.0) 
                     + ((x as f32 * 0.12).cos() * 4.0);
@@ -150,15 +145,13 @@ impl Grid {
                     continue;
                 }
 
-                // Add some coal veins in the stone bedrock
                 if y as f32 > platform_height + 5.0 && rng.gen_bool(0.06) {
                     self.draw_circle(x, y, 2, ElementType::Coal);
                 }
             }
         }
 
-        // 2. Build platforms in mid-air
-        // Left platform (Stone support, Wood tray for Oil)
+        // Platforms
         let left_plat_y = self.height * 2 / 5;
         for x in 10..45 {
             self.set(x, left_plat_y, Cell::new(ElementType::Wood));
@@ -168,14 +161,12 @@ impl Grid {
                 }
             }
         }
-        // Fill Left Tray with Oil
         for x in 11..44 {
             for y in (left_plat_y - 4)..left_plat_y {
                 self.set(x, y, Cell::new(ElementType::Oil));
             }
         }
 
-        // Center platform (Wood tray holding Gunpowder box)
         let center_plat_y = self.height * 3 / 5;
         for x in (self.width / 2 - 25)..(self.width / 2 + 25) {
             self.set(x, center_plat_y, Cell::new(ElementType::Wood));
@@ -185,7 +176,6 @@ impl Grid {
                 }
             }
         }
-        // Spawn Gunpowder box inside center platform tray
         let box_cx = self.width / 2;
         let box_cy = center_plat_y - 1;
         for dy in 0..5 {
@@ -193,17 +183,14 @@ impl Grid {
                 let px = (box_cx as i32 + dx) as usize;
                 let py = (box_cy as i32 - dy) as usize;
                 
-                // Gunpowder crate borders (Wood)
                 if dx == -12 || dx == 11 || dy == 4 || dy == 0 {
                     self.set(px, py, Cell::new(ElementType::Wood));
                 } else {
-                    // Gunpowder filling
                     self.set(px, py, Cell::new(ElementType::Gunpowder));
                 }
             }
         }
 
-        // Right platform (Stone structure holding Ice and a pocket of Acid)
         let right_plat_y = self.height * 2 / 5;
         for x in (self.width - 45)..(self.width - 10) {
             self.set(x, right_plat_y, Cell::new(ElementType::Stone));
@@ -213,7 +200,6 @@ impl Grid {
                 }
             }
         }
-        // Fill Right Tray with Ice blocks and a puddle of Water
         for x in (self.width - 44)..(self.width - 11) {
             for y in (right_plat_y - 4)..right_plat_y {
                 if x % 4 == 0 || y % 2 == 0 {
@@ -224,11 +210,9 @@ impl Grid {
             }
         }
 
-        // 3. Lower caverns: spawn Water pool
         let pool_y_start = self.height * 4 / 5;
         for y in pool_y_start..(self.height - 6) {
             for x in (self.width / 3)..(self.width * 2 / 3) {
-                // If it is Air or Gravel, fill with Water
                 let current_elem = self.get(x, y).element;
                 if current_elem == ElementType::Air || current_elem == ElementType::Gravel {
                     self.set(x, y, Cell::new(ElementType::Water));
@@ -236,21 +220,18 @@ impl Grid {
             }
         }
 
-        // 4. Bury Gold veins deep in bedrock
         for _ in 0..12 {
             let gx = rng.gen_range(5..(self.width - 5));
             let gy = rng.gen_range((self.height - 4)..self.height - 1);
             self.draw_circle(gx, gy, 1, ElementType::Gold);
         }
         
-        // Spawn small pockets of Gravel in the bedrock
         for _ in 0..8 {
             let gx = rng.gen_range(5..(self.width - 5));
             let gy = rng.gen_range((self.height - 12)..(self.height - 4));
             self.draw_circle(gx, gy, 2, ElementType::Gravel);
         }
 
-        // Wake up all rows initially
         self.row_active.fill(true);
     }
 
@@ -258,52 +239,114 @@ impl Grid {
         self.generation = self.generation.wrapping_add(1);
         let mut rng = rand::thread_rng();
 
-        // Clear next frame active rows buffer
         self.next_row_active.fill(false);
 
         // Scan from bottom to top so falling items update correctly
         for y in (0..self.height).rev() {
-            // Check if this row or its adjacent neighbors are active
-            let is_active = self.row_active[y]
-                || (y > 0 && self.row_active[y - 1])
-                || (y + 1 < self.height && self.row_active[y + 1]);
-
-            if !is_active {
+            // Simplified row check (neighbor activation was handled during write phase)
+            if !self.row_active[y] {
                 continue;
             }
 
-            // Randomize horizontal sweep direction to prevent scrolling bias
             let left_to_right = rng.gen_bool(0.5);
             if left_to_right {
                 for x in 0..self.width {
-                    self.update_cell(x, y);
+                    self.update_cell(x, y, &mut rng);
                 }
             } else {
                 for x in (0..self.width).rev() {
-                    self.update_cell(x, y);
+                    self.update_cell(x, y, &mut rng);
                 }
             }
         }
 
-        // Swap active states for the next frame
         std::mem::swap(&mut self.row_active, &mut self.next_row_active);
     }
 
-    fn update_cell(&mut self, x: usize, y: usize) {
+    #[inline]
+    fn check_fire_neighbor(&mut self, idx: usize, y: usize, nx: usize, ny: usize, n_idx: usize, rng: &mut ThreadRng) -> Option<bool> {
+        let n_cell = self.cells[n_idx];
+        if n_cell.element.is_flammable() {
+            self.activate_row(ny);
+            match n_cell.element {
+                ElementType::Gunpowder => {
+                    self.explode(nx, ny, 10);
+                    return Some(true); // Exploded
+                }
+                ElementType::Oil => {
+                    if rng.gen_bool(0.4) {
+                        self.cells[n_idx] = Cell::new(ElementType::Fire);
+                    }
+                }
+                ElementType::Wood => {
+                    if rng.gen_bool(0.12) {
+                        self.cells[n_idx] = Cell::new(ElementType::Fire);
+                    }
+                }
+                ElementType::Coal => {
+                    if rng.gen_bool(0.04) {
+                        self.cells[n_idx] = Cell::new(ElementType::Fire);
+                    }
+                }
+                _ => {}
+            }
+        } else if n_cell.element == ElementType::Ice {
+            self.activate_row(ny);
+            if rng.gen_bool(0.2) {
+                self.cells[n_idx] = Cell::new(ElementType::Water);
+            }
+        } else if n_cell.element == ElementType::Water {
+            // Fire gets extinguished
+            self.cells[idx] = Cell::new(ElementType::Steam);
+            self.activate_row(y);
+            return Some(true); // Extinguished
+        } else if n_cell.element.is_falling_solid() || n_cell.element == ElementType::Lava {
+            // Smothered
+            self.cells[idx] = Cell::new(ElementType::Smoke);
+            self.activate_row(y);
+            return Some(true); // Smothered
+        }
+        None
+    }
+
+    #[inline]
+    fn check_lava_neighbor(&mut self, idx: usize, nx: usize, ny: usize, n_idx: usize) -> Option<bool> {
+        let n_cell = self.cells[n_idx];
+        if n_cell.element.is_flammable() {
+            self.activate_row(ny);
+            if n_cell.element == ElementType::Gunpowder {
+                self.explode(nx, ny, 10);
+                return Some(true); // Exploded
+            } else {
+                self.cells[n_idx] = Cell::new(ElementType::Fire);
+            }
+        } else if n_cell.element == ElementType::Ice {
+            self.activate_row(ny);
+            self.cells[n_idx] = Cell::new(ElementType::Water);
+        } else if n_cell.element == ElementType::Water {
+            self.activate_row(ny);
+            self.cells[idx] = Cell::new(ElementType::Stone);
+            self.cells[n_idx] = Cell::new(ElementType::Steam);
+            return Some(true); // Hardened (Lava turns to Stone)
+        }
+        None
+    }
+
+    fn update_cell(&mut self, x: usize, y: usize, rng: &mut ThreadRng) {
         let idx = y * self.width + x;
         let mut cell = self.cells[idx];
         
-        // Skip empty cells or already updated cells
-        if cell.element == ElementType::Air || cell.generation == self.generation {
+        // Skip empty cells, static solids, or already processed cells
+        if cell.element == ElementType::Air 
+            || cell.element.is_static_solid() 
+            || cell.generation == self.generation 
+        {
             return;
         }
-
-        let mut rng = rand::thread_rng();
 
         // 1. Reactions & State Updates
         match cell.element {
             ElementType::Fire => {
-                // Fire is awake and updating
                 self.activate_row(y);
 
                 if cell.life == 0 {
@@ -317,54 +360,25 @@ impl Grid {
                 cell.life -= 1;
                 self.cells[idx] = cell;
 
-                // Ignite flammable neighbors
-                let neighbors = [
-                    (x as i32 - 1, y as i32),
-                    (x as i32 + 1, y as i32),
-                    (x as i32, y as i32 - 1),
-                    (x as i32, y as i32 + 1),
-                ];
-                for &(nx, ny) in &neighbors {
-                    if nx >= 0 && nx < self.width as i32 && ny >= 0 && ny < self.height as i32 {
-                        let nx = nx as usize;
-                        let ny = ny as usize;
-                        let n_idx = ny * self.width + nx;
-                        let n_cell = self.cells[n_idx];
-                        if n_cell.element.is_flammable() {
-                            self.activate_row(ny);
-                            match n_cell.element {
-                                ElementType::Gunpowder => {
-                                    self.explode(nx, ny, 10);
-                                    return; // Exploded, stop updating this cell
-                                }
-                                ElementType::Oil => {
-                                    if rng.gen_bool(0.4) {
-                                        self.cells[n_idx] = Cell::new(ElementType::Fire);
-                                    }
-                                }
-                                ElementType::Wood => {
-                                    if rng.gen_bool(0.12) {
-                                        self.cells[n_idx] = Cell::new(ElementType::Fire);
-                                    }
-                                }
-                                ElementType::Coal => {
-                                    if rng.gen_bool(0.04) {
-                                        self.cells[n_idx] = Cell::new(ElementType::Fire);
-                                    }
-                                }
-                                _ => {}
-                            }
-                        } else if n_cell.element == ElementType::Ice {
-                            self.activate_row(ny);
-                            if rng.gen_bool(0.2) {
-                                self.cells[n_idx] = Cell::new(ElementType::Water);
-                            }
-                        } else if n_cell.element == ElementType::Water {
-                            // Fire gets extinguished
-                            self.cells[idx] = Cell::new(ElementType::Steam);
-                            self.activate_row(y);
-                            return;
-                        }
+                // Ignite flammable neighbors with unrolled boundary checks (no index multiplications)
+                if x > 0 {
+                    if let Some(stop) = self.check_fire_neighbor(idx, y, x - 1, y, idx - 1, rng) {
+                        if stop { return; }
+                    }
+                }
+                if x + 1 < self.width {
+                    if let Some(stop) = self.check_fire_neighbor(idx, y, x + 1, y, idx + 1, rng) {
+                        if stop { return; }
+                    }
+                }
+                if y > 0 {
+                    if let Some(stop) = self.check_fire_neighbor(idx, y, x, y - 1, idx - self.width, rng) {
+                        if stop { return; }
+                    }
+                }
+                if y + 1 < self.height {
+                    if let Some(stop) = self.check_fire_neighbor(idx, y, x, y + 1, idx + self.width, rng) {
+                        if stop { return; }
                     }
                 }
             }
@@ -405,18 +419,17 @@ impl Grid {
                 cell.life -= 1;
                 self.cells[idx] = cell;
 
-                // Corrosion
-                let neighbors = [
-                    (x as i32 - 1, y as i32),
-                    (x as i32 + 1, y as i32),
-                    (x as i32, y as i32 - 1),
-                    (x as i32, y as i32 + 1),
-                ];
-                let &(nx, ny) = neighbors.choose(&mut rng).unwrap();
-                if nx >= 0 && nx < self.width as i32 && ny >= 0 && ny < self.height as i32 {
-                    let nx = nx as usize;
-                    let ny = ny as usize;
-                    let n_idx = ny * self.width + nx;
+                // Corrosion: select one random neighbor directly without index multiplications
+                let dir = rng.gen_range(0..4);
+                let opt_target = match dir {
+                    0 if x > 0 => Some((x - 1, y, idx - 1)),
+                    1 if x + 1 < self.width => Some((x + 1, y, idx + 1)),
+                    2 if y > 0 => Some((x, y - 1, idx - self.width)),
+                    3 if y + 1 < self.height => Some((x, y + 1, idx + self.width)),
+                    _ => None,
+                };
+
+                if let Some((nx, ny, n_idx)) = opt_target {
                     let n_cell = self.cells[n_idx];
 
                     if n_cell.element != ElementType::Air 
@@ -438,36 +451,25 @@ impl Grid {
             ElementType::Lava => {
                 self.activate_row(y);
 
-                let neighbors = [
-                    (x as i32 - 1, y as i32),
-                    (x as i32 + 1, y as i32),
-                    (x as i32, y as i32 - 1),
-                    (x as i32, y as i32 + 1),
-                ];
-                for &(nx, ny) in &neighbors {
-                    if nx >= 0 && nx < self.width as i32 && ny >= 0 && ny < self.height as i32 {
-                        let nx = nx as usize;
-                        let ny = ny as usize;
-                        let n_idx = ny * self.width + nx;
-                        let n_cell = self.cells[n_idx];
-
-                        if n_cell.element.is_flammable() {
-                            self.activate_row(ny);
-                            if n_cell.element == ElementType::Gunpowder {
-                                self.explode(nx, ny, 10);
-                                return;
-                            } else {
-                                self.cells[n_idx] = Cell::new(ElementType::Fire);
-                            }
-                        } else if n_cell.element == ElementType::Ice {
-                            self.activate_row(ny);
-                            self.cells[n_idx] = Cell::new(ElementType::Water);
-                        } else if n_cell.element == ElementType::Water {
-                            self.activate_row(ny);
-                            self.cells[idx] = Cell::new(ElementType::Stone);
-                            self.cells[n_idx] = Cell::new(ElementType::Steam);
-                            return;
-                        }
+                // Check neighbors with unrolled boundary checks (no index multiplications)
+                if x > 0 {
+                    if let Some(stop) = self.check_lava_neighbor(idx, x - 1, y, idx - 1) {
+                        if stop { return; }
+                    }
+                }
+                if x + 1 < self.width {
+                    if let Some(stop) = self.check_lava_neighbor(idx, x + 1, y, idx + 1) {
+                        if stop { return; }
+                    }
+                }
+                if y > 0 {
+                    if let Some(stop) = self.check_lava_neighbor(idx, x, y - 1, idx - self.width) {
+                        if stop { return; }
+                    }
+                }
+                if y + 1 < self.height {
+                    if let Some(stop) = self.check_lava_neighbor(idx, x, y + 1, idx + self.width) {
+                        if stop { return; }
                     }
                 }
             }
@@ -612,6 +614,10 @@ impl Grid {
             return false;
         }
         if src.is_gas() {
+            // Fire flames cannot rise through liquids (only Smoke and Steam can bubble up)
+            if src == ElementType::Fire {
+                return dst == ElementType::Air;
+            }
             return dst == ElementType::Air || dst.is_liquid();
         }
         src.density() > dst.density()
@@ -666,14 +672,23 @@ impl Grid {
                             if rng.gen_bool(0.5) {
                                 self.explode(tx, ty, radius / 2);
                             }
+                        } else if target.element.is_falling_solid() 
+                            || target.element == ElementType::Lava 
+                            || target.element == ElementType::Acid
+                        {
+                            // Sand, Gravel, Gold, Lava, and Acid resist vaporization and are left intact
                         } else {
-                            if dist_sq < (r * r) / 2 {
-                                self.cells[t_idx] = Cell::new(ElementType::Fire);
+                            if target.element == ElementType::Water {
+                                self.cells[t_idx] = Cell::new(ElementType::Steam);
                             } else {
-                                if rng.gen_bool(0.6) {
-                                    self.cells[t_idx] = Cell::new(ElementType::Smoke);
-                                } else {
+                                if dist_sq < (r * r) / 2 {
                                     self.cells[t_idx] = Cell::new(ElementType::Fire);
+                                } else {
+                                    if rng.gen_bool(0.6) {
+                                        self.cells[t_idx] = Cell::new(ElementType::Smoke);
+                                    } else {
+                                        self.cells[t_idx] = Cell::new(ElementType::Fire);
+                                    }
                                 }
                             }
                         }
@@ -683,3 +698,105 @@ impl Grid {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lava_fire_interaction() {
+        let mut grid = Grid::new(3, 5);
+        grid.set(1, 1, Cell::new(ElementType::Lava));
+        grid.set(1, 2, Cell::new(ElementType::Fire));
+
+        for _ in 0..10 {
+            grid.tick();
+        }
+
+        let has_lava = grid.cells.iter().any(|c| c.element == ElementType::Lava);
+        assert!(has_lava, "Lava should not disappear!");
+    }
+
+    #[test]
+    fn test_sand_fire_interaction() {
+        let mut grid = Grid::new(3, 5);
+        grid.set(1, 1, Cell::new(ElementType::Sand));
+        grid.set(1, 2, Cell::new(ElementType::Fire));
+
+        for _ in 0..10 {
+            grid.tick();
+        }
+
+        let has_sand = grid.cells.iter().any(|c| c.element == ElementType::Sand);
+        assert!(has_sand, "Sand should not disappear!");
+    }
+
+    #[test]
+    fn test_fire_above_lava() {
+        let mut grid = Grid::new(3, 5);
+        grid.set(1, 2, Cell::new(ElementType::Lava));
+        grid.set(1, 1, Cell::new(ElementType::Fire));
+
+        for _ in 0..10 {
+            grid.tick();
+        }
+
+        let has_lava = grid.cells.iter().any(|c| c.element == ElementType::Lava);
+        assert!(has_lava, "Lava should not disappear when Fire is above it!");
+    }
+
+    #[test]
+    fn test_large_lava_fire_retention() {
+        let mut grid = Grid::new(10, 10);
+        let mut initial_lava = 0;
+        for y in 0..5 {
+            for x in 0..10 {
+                grid.set(x, y, Cell::new(ElementType::Lava));
+                initial_lava += 1;
+            }
+        }
+        for y in 5..9 {
+            for x in 0..10 {
+                grid.set(x, y, Cell::new(ElementType::Fire));
+            }
+        }
+        for x in 0..10 {
+            grid.set(x, 9, Cell::new(ElementType::Stone));
+        }
+
+        for _ in 0..30 {
+            grid.tick();
+        }
+
+        let final_lava = grid.cells.iter().filter(|c| c.element == ElementType::Lava).count();
+        assert_eq!(initial_lava, final_lava, "Lava should not disappear during large-scale interaction with Fire!");
+    }
+
+    #[test]
+    fn test_large_sand_fire_retention() {
+        let mut grid = Grid::new(10, 10);
+        let mut initial_sand = 0;
+        for y in 0..5 {
+            for x in 0..10 {
+                grid.set(x, y, Cell::new(ElementType::Sand));
+                initial_sand += 1;
+            }
+        }
+        for y in 5..9 {
+            for x in 0..10 {
+                grid.set(x, y, Cell::new(ElementType::Fire));
+            }
+        }
+        for x in 0..10 {
+            grid.set(x, 9, Cell::new(ElementType::Stone));
+        }
+
+        for _ in 0..30 {
+            grid.tick();
+        }
+
+        let final_sand = grid.cells.iter().filter(|c| c.element == ElementType::Sand).count();
+        assert_eq!(initial_sand, final_sand, "Sand should not disappear during large-scale interaction with Fire!");
+    }
+}
+
