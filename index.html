@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Falling Sand Simulator | Noita Edition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #050608;
+            --bg-surface: rgba(13, 16, 23, 0.6);
+            --bg-surface-opaque: #0d1017;
+            --bg-surface-hover: rgba(255, 255, 255, 0.05);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 240, 255, 0.1);
+            --primary-neon: #00f0ff;
+            --primary-neon-glow: rgba(0, 240, 255, 0.25);
+            --accent-purple: #bd00ff;
+            --accent-purple-glow: rgba(189, 0, 255, 0.25);
+            --danger-neon: #ff0055;
+            --font-display: 'Outfit', sans-serif;
+            --font-sans: 'Inter', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: #e2e8f0;
+            font-family: var(--font-sans);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(189, 0, 255, 0.04) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(0, 240, 255, 0.04) 0px, transparent 50%);
+        }
+
+        /* Custom scrollbar for control drawers */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+<link rel="modulepreload" href="/falling_sand_sims/falling_sand_sims-76a87214414c45c2.js" crossorigin="anonymous" integrity="sha384-iOJrElMLbHyBJgAqXwMjt3XmqM1rWoU55rkiOwpvVV2GVEw1eZfBiJgicdEilI69"><link rel="preload" href="/falling_sand_sims/falling_sand_sims-76a87214414c45c2_bg.wasm" crossorigin="anonymous" integrity="sha384-3VyZFUbG3xkvFYe1cX2g/ZH4dPNaTi5pyTnnHAfKDmienIKAkd6sRw6GmlBjoXTs" as="fetch" type="application/wasm"></head>
+<body>
+
+<script type="module">
+import init, * as bindings from '/falling_sand_sims/falling_sand_sims-76a87214414c45c2.js';
+const wasm = await init({ module_or_path: '/falling_sand_sims/falling_sand_sims-76a87214414c45c2_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script></body>
+</html>
